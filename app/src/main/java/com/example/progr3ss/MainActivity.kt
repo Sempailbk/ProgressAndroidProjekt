@@ -20,63 +20,47 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import com.example.progr3ss.data.remote.Network
 import com.example.progr3ss.data.remote.SignInRequest
+import com.example.progr3ss.ui.navigation.AppNavigation
+import com.example.progr3ss.ui.navigation.Routes
 import com.example.progr3ss.ui.theme.Progr3ssTheme
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+
+        var startDestination by mutableStateOf<String?>(null)
+        splashScreen.setKeepOnScreenCondition { startDestination == null }
+
+        val app = applicationContext as Progr3ssApp
+        lifecycleScope.launch {
+            startDestination = decideStartDestination(app)
+        }
+
         setContent {
             Progr3ssTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                startDestination?.let { AppNavigation(startDestination = it) }
             }
         }
     }
 }
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
+private suspend fun decideStartDestination(app: Progr3ssApp): String{
+    val hasRefreshToken = app.tokenStore.refreshToken.first() != null
+    if(!hasRefreshToken) return Routes.LOGIN
 
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    Progr3ssTheme {
-        Greeting("Android")
+    return try {
+        app.network.api.getMyProfile()
+        Routes.HOME
+    } catch(e: Exception){
+        Routes.LOGIN
     }
-}
-
-@Composable
-fun ConnectionTest() {
-    val app = LocalContext.current.applicationContext as Progr3ssApp
-    var result by remember { mutableStateOf("Working…") }
-
-    LaunchedEffect(Unit) {
-        result = try {
-            val auth = app.network.api.signIn(SignInRequest("YOUR_TEST_EMAIL", "YOUR_TEST_PASSWORD"))
-            app.tokenStore.save(auth.tokens)
-
-            val me = app.network.api.getMyProfile()   // the interceptor adds the token
-            "Signed in and fetched profile:\n${me.username} / ${me.email}"
-        } catch (e: HttpException) {
-            "Server answered ${e.code()}:\n${e.response()?.errorBody()?.string()}"
-        } catch (e: Exception) {
-            "Could not reach the server:\n${e.message}"
-        }
-    }
-
-    Text(result, modifier = Modifier.systemBarsPadding().padding(24.dp))
 }

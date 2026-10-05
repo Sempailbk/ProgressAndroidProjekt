@@ -21,7 +21,7 @@ data class ProfileDto(
 data class UserDto(
     val id: Int,
     val email: String,
-    @Serializable("auth_provider") val authProvider: String,
+    @SerialName("auth_provider") val authProvider: String,
     val profile: ProfileDto? = null,
     )
 @Serializable
